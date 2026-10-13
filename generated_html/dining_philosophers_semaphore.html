@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dining Philosophers — Semaphores</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 22px;
+    font-family: Arial, sans-serif;
+    background: #f1f5f9;
+    color: #172033;
+}
+
+header {
+    background: #172554;
+    color: white;
+    padding: 22px;
+    border-radius: 14px;
+    margin-bottom: 18px;
+}
+
+header p {
+    line-height: 1.6;
+}
+
+.panel {
+    background: white;
+    padding: 18px;
+    border-radius: 12px;
+    margin-bottom: 18px;
+    box-shadow: 0 3px 12px #0000000b;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+    gap: 10px;
+}
+
+.metric {
+    background: #f8fafc;
+    padding: 14px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+}
+
+.metric span {
+    display: block;
+    color: #64748b;
+    font-size: 13px;
+    margin-bottom: 7px;
+}
+
+.metric strong {
+    font-size: 23px;
+}
+
+button {
+    padding: 10px 15px;
+    margin: 4px;
+    border: 0;
+    border-radius: 8px;
+    background: #1d4ed8;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #1e40af;
+}
+
+button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+input[type=range] {
+    width: 100%;
+    margin: 15px 0;
+}
+
+#eventMessage {
+    font-size: 16px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+#eventType {
+    display: inline-block;
+    padding: 6px 10px;
+    border-radius: 20px;
+    background: #dbeafe;
+    color: #1e40af;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.arena {
+    position: relative;
+    max-width: 720px;
+    height: 540px;
+    margin: 10px auto 0;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    overflow: hidden;
+}
+
+.table {
+    position: absolute;
+    width: 250px;
+    height: 250px;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: #dbeafe;
+    border: 9px solid #93c5fd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-weight: bold;
+    color: #1e3a8a;
+    line-height: 1.5;
+}
+
+.phil {
+    position: absolute;
+    width: 155px;
+    min-height: 82px;
+    padding: 10px;
+    border-radius: 12px;
+    background: #e2e8f0;
+    border: 2px solid #94a3b8;
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.phil strong {
+    display: block;
+    font-size: 15px;
+    margin-bottom: 4px;
+}
+
+.p0 {
+    left: 50%;
+    top: 12px;
+    transform: translateX(-50%);
+}
+
+.p1 {
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.p2 {
+    left: 50%;
+    bottom: 12px;
+    transform: translateX(-50%);
+}
+
+.p3 {
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.fork {
+    position: absolute;
+    width: 105px;
+    padding: 10px 5px;
+    text-align: center;
+    border-radius: 10px;
+    background: #dcfce7;
+    border: 2px solid #16a34a;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.f0 {
+    left: calc(50% + 70px);
+    top: calc(50% - 180px);
+}
+
+.f1 {
+    right: calc(50% - 190px);
+    top: calc(50% + 65px);
+}
+
+.f2 {
+    left: calc(50% - 175px);
+    top: calc(50% + 65px);
+}
+
+.f3 {
+    left: calc(50% - 175px);
+    top: calc(50% - 180px);
+}
+
+.thread-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+}
+
+.thread {
+    padding: 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    background: #f8fafc;
+}
+
+.thread strong {
+    display: block;
+    margin-bottom: 7px;
+}
+
+#eventList {
+    max-height: 390px;
+    overflow-y: auto;
+}
+
+.event-row {
+    border-left: 4px solid #94a3b8;
+    padding: 10px 12px;
+    margin: 7px 0;
+    background: #f8fafc;
+    border-radius: 0 8px 8px 0;
+    font-size: 13px;
+    line-height: 1.5;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+}
+
+.event-row.current {
+    background: #dbeafe;
+    border-left-color: #2563eb;
+}
+
+.small {
+    font-size: 13px;
+    color: #64748b;
+}
+
+@media(max-width: 600px) {
+    body {
+        padding: 10px;
+    }
+
+    .arena {
+        height: 610px;
+    }
+
+    .table {
+        width: 180px;
+        height: 180px;
+    }
+
+    .phil {
+        width: 125px;
+        font-size: 11px;
+    }
+
+    .f0 {
+        left: calc(50% + 30px);
+        top: calc(50% - 155px);
+    }
+
+    .f1 {
+        right: calc(50% - 155px);
+        top: calc(50% + 55px);
+    }
+
+    .f2 {
+        left: calc(50% - 145px);
+        top: calc(50% + 55px);
+    }
+
+    .f3 {
+        left: calc(50% - 145px);
+        top: calc(50% - 155px);
+    }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>Dining Philosophers Problem — Semaphores</h1>
+    <p>
+        Four philosophers share four forks. Each fork is controlled
+        by a semaphore, and a room semaphore allows at most three
+        philosophers to compete for forks at once, preventing deadlock.
+    </p>
+    <p id="progress">Loading execution...</p>
+</header>
+
+<section class="panel">
+    <h2>System status</h2>
+    <div class="grid">
+        <div class="metric">
+            <span>Current event</span>
+            <strong id="eventNumber">0</strong>
+        </div>
+        <div class="metric">
+            <span>Eating now</span>
+            <strong id="eating">0</strong>
+        </div>
+        <div class="metric">
+            <span>Forks in use</span>
+            <strong id="forksUsed">0 / 4</strong>
+        </div>
+        <div class="metric">
+            <span>Total meals</span>
+            <strong id="meals">0</strong>
+        </div>
+    </div>
+</section>
+
+<section class="panel">
+    <h2>Dining table visualization</h2>
+    <div class="arena">
+        <div class="table">
+            SHARED<br>DINING TABLE<br>
+            <small>Semaphore control</small>
+        </div>
+
+        <div class="phil p0" id="p0"></div>
+        <div class="phil p1" id="p1"></div>
+        <div class="phil p2" id="p2"></div>
+        <div class="phil p3" id="p3"></div>
+
+        <div class="fork f0" id="f0"></div>
+        <div class="fork f1" id="f1"></div>
+        <div class="fork f2" id="f2"></div>
+        <div class="fork f3" id="f3"></div>
+    </div>
+
+    <p class="small">
+        Green forks are available; red forks are held by a philosopher.
+        Philosopher cards show their state and meals completed.
+    </p>
+</section>
+
+<section class="panel">
+    <h2>Execution controls</h2>
+    <button id="playButton" onclick="play()">Play</button>
+    <button onclick="pause()">Pause</button>
+    <button onclick="previous()">Previous</button>
+    <button onclick="next()">Next</button>
+    <button onclick="reset()">Reset</button>
+
+    <input id="timeline" type="range" min="0" max="0"
+           value="0" oninput="goTo(this.value)">
+
+    <span id="eventType">Start</span>
+    <h3 id="eventTitle">Waiting to begin</h3>
+    <p id="eventMessage">
+        Press Play or Next to inspect the execution.
+    </p>
+    <p class="small" id="eventTime"></p>
+</section>
+
+<section class="panel">
+    <h2>Philosopher states</h2>
+    <div class="thread-grid" id="threadGrid"></div>
+</section>
+
+<section class="panel">
+    <h2>Execution event history</h2>
+    <div id="eventList"></div>
+</section>
+
+
+
+<script>
+const events = [{"number": 1, "time": 0.0, "message": "Simulation started. Semaphore objects are ready.", "type": "start", "states": ["Thinking", "Thinking", "Thinking", "Thinking"], "fork_owner": [null, null, null, null], "meals_completed": [0, 0, 0, 0]}, {"number": 2, "time": 0.0, "message": "Philosopher 3 is thinking before meal 1.", "type": "thinking", "states": ["Thinking", "Thinking", "Thinking", "Thinking"], "fork_owner": [null, null, null, null], "meals_completed": [0, 0, 0, 0]}, {"number": 3, "time": 0.0, "message": "Philosopher 1 is thinking before meal 1.", "type": "thinking", "states": ["Thinking", "Thinking", "Thinking", "Thinking"], "fork_owner": [null, null, null, null], "meals_completed": [0, 0, 0, 0]}, {"number": 4, "time": 0.0, "message": "Philosopher 2 is thinking before meal 1.", "type": "thinking", "states": ["Thinking", "Thinking", "Thinking", "Thinking"], "fork_owner": [null, null, null, null], "meals_completed": [0, 0, 0, 0]}, {"number": 5, "time": 0.0, "message": "Philosopher 4 is thinking before meal 1.", "type": "thinking", "states": ["Thinking", "Thinking", "Thinking", "Thinking"], "fork_owner": [null, null, null, null], "meals_completed": [0, 0, 0, 0]}, {"number": 6, "time": 0.225, "message": "Philosopher 3 is hungry and requests forks 3 and 4.", "type": "hungry", "states": ["Thinking", "Thinking", "Hungry / Waiting", "Thinking"], "fork_owner": [null, null, null, null], "meals_completed": [0, 0, 0, 0]}, {"number": 7, "time": 0.225, "message": "Philosopher 3 entered the room semaphore.", "type": "room", "states": ["Thinking", "Thinking", "Hungry / Waiting", "Thinking"], "fork_owner": [null, null, null, null], "meals_completed": [0, 0, 0, 0]}, {"number": 8, "time": 0.225, "message": "Philosopher 3 acquired fork 3.", "type": "acquire", "states": ["Thinking", "Thinking", "Acquiring Forks", "Thinking"], "fork_owner": [null, null, 2, null], "meals_completed": [0, 0, 0, 0]}, {"number": 9, "time": 0.225, "message": "Philosopher 3 acquired fork 4 and starts eating meal 1.", "type": "eat", "states": ["Thinking", "Thinking", "Eating", "Thinking"], "fork_owner": [null, null, 2, 2], "meals_completed": [0, 0, 0, 0]}, {"number": 10, "time": 0.324, "message": "Philosopher 2 is hungry and requests forks 2 and 3.", "type": "hungry", "states": ["Thinking", "Hungry / Waiting", "Eating", "Thinking"], "fork_owner": [null, null, 2, 2], "meals_completed": [0, 0, 0, 0]}, {"number": 11, "time": 0.324, "message": "Philosopher 2 entered the room semaphore.", "type": "room", "states": ["Thinking", "Hungry / Waiting", "Eating", "Thinking"], "fork_owner": [null, null, 2, 2], "meals_completed": [0, 0, 0, 0]}, {"number": 12, "time": 0.324, "message": "Philosopher 2 acquired fork 2.", "type": "acquire", "states": ["Thinking", "Acquiring Forks", "Eating", "Thinking"], "fork_owner": [null, 1, 2, 2], "meals_completed": [0, 0, 0, 0]}, {"number": 13, "time": 0.335, "message": "Philosopher 4 is hungry and requests forks 4 and 1.", "type": "hungry", "states": ["Thinking", "Acquiring Forks", "Eating", "Hungry / Waiting"], "fork_owner": [null, 1, 2, 2], "meals_completed": [0, 0, 0, 0]}, {"number": 14, "time": 0.335, "message": "Philosopher 4 entered the room semaphore.", "type": "room", "states": ["Thinking", "Acquiring Forks", "Eating", "Hungry / Waiting"], "fork_owner": [null, 1, 2, 2], "meals_completed": [0, 0, 0, 0]}, {"number": 15, "time": 0.402, "message": "Philosopher 1 is hungry and requests forks 1 and 2.", "type": "hungry", "states": ["Hungry / Waiting", "Acquiring Forks", "Eating", "Hungry / Waiting"], "fork_owner": [null, 1, 2, 2], "meals_completed": [0, 0, 0, 0]}, {"number": 16, "time": 0.565, "message": "Philosopher 3 finished meal 1 and is releasing the forks.", "type": "release", "states": ["Hungry / Waiting", "Acquiring Forks", "Releasing Forks", "Hungry / Waiting"], "fork_owner": [null, 1, 2, 2], "meals_completed": [0, 0, 1, 0]}, {"number": 17, "time": 0.565, "message": "Philosopher 3 released fork 4.", "type": "release", "states": ["Hungry / Waiting", "Acquiring Forks", "Releasing Forks", "Hungry / Waiting"], "fork_owner": [null, 1, 2, null], "meals_completed": [0, 0, 1, 0]}, {"number": 18, "time": 0.565, "message": "Philosopher 3 released fork 3.", "type": "release", "states": ["Hungry / Waiting", "Acquiring Forks", "Releasing Forks", "Hungry / Waiting"], "fork_owner": [null, 1, null, null], "meals_completed": [0, 0, 1, 0]}, {"number": 19, "time": 0.565, "message": "Philosopher 3 released the room semaphore.", "type": "room", "states": ["Hungry / Waiting", "Acquiring Forks", "Releasing Forks", "Hungry / Waiting"], "fork_owner": [null, 1, null, null], "meals_completed": [0, 0, 1, 0]}, {"number": 20, "time": 0.565, "message": "Philosopher 3 is thinking before meal 2.", "type": "thinking", "states": ["Hungry / Waiting", "Acquiring Forks", "Thinking", "Hungry / Waiting"], "fork_owner": [null, 1, null, null], "meals_completed": [0, 0, 1, 0]}, {"number": 21, "time": 0.565, "message": "Philosopher 4 acquired fork 4.", "type": "acquire", "states": ["Hungry / Waiting", "Acquiring Forks", "Thinking", "Acquiring Forks"], "fork_owner": [null, 1, null, 3], "meals_completed": [0, 0, 1, 0]}, {"number": 22, "time": 0.565, "message": "Philosopher 4 acquired fork 1 and starts eating meal 1.", "type": "eat", "states": ["Hungry / Waiting", "Acquiring Forks", "Thinking", "Eating"], "fork_owner": [3, 1, null, 3], "meals_completed": [0, 0, 1, 0]}, {"number": 23, "time": 0.565, "message": "Philosopher 2 acquired fork 3 and starts eating meal 1.", "type": "eat", "states": ["Hungry / Waiting", "Eating", "Thinking", "Eating"], "fork_owner": [3, 1, 1, 3], "meals_completed": [0, 0, 1, 0]}, {"number": 24, "time": 0.565, "message": "Philosopher 1 entered the room semaphore.", "type": "room", "states": ["Hungry / Waiting", "Eating", "Thinking", "Eating"], "fork_owner": [3, 1, 1, 3], "meals_completed": [0, 0, 1, 0]}, {"number": 25, "time": 0.866, "message": "Philosopher 3 is hungry and requests forks 3 and 4.", "type": "hungry", "states": ["Hungry / Waiting", "Eating", "Hungry / Waiting", "Eating"], "fork_owner": [3, 1, 1, 3], "meals_completed": [0, 0, 1, 0]}, {"number": 26, "time": 0.866, "message": "Philosopher 2 finished meal 1 and is releasing the forks.", "type": "release", "states": ["Hungry / Waiting", "Releasing Forks", "Hungry / Waiting", "Eating"], "fork_owner": [3, 1, 1, 3], "meals_completed": [0, 1, 1, 0]}, {"number": 27, "time": 0.866, "message": "Philosopher 2 released fork 3.", "type": "release", "states": ["Hungry / Waiting", "Releasing Forks", "Hungry / Waiting", "Eating"], "fork_owner": [3, 1, null, 3], "meals_completed": [0, 1, 1, 0]}, {"number": 28, "time": 0.866, "message": "Philosopher 2 released fork 2.", "type": "release", "states": ["Hungry / Waiting", "Releasing Forks", "Hungry / Waiting", "Eating"], "fork_owner": [3, null, null, 3], "meals_completed": [0, 1, 1, 0]}, {"number": 29, "time": 0.866, "message": "Philosopher 2 released the room semaphore.", "type": "room", "states": ["Hungry / Waiting", "Releasing Forks", "Hungry / Waiting", "Eating"], "fork_owner": [3, null, null, 3], "meals_completed": [0, 1, 1, 0]}, {"number": 30, "time": 0.866, "message": "Philosopher 2 is thinking before meal 2.", "type": "thinking", "states": ["Hungry / Waiting", "Thinking", "Hungry / Waiting", "Eating"], "fork_owner": [3, null, null, 3], "meals_completed": [0, 1, 1, 0]}, {"number": 31, "time": 0.866, "message": "Philosopher 3 entered the room semaphore.", "type": "room", "states": ["Hungry / Waiting", "Thinking", "Hungry / Waiting", "Eating"], "fork_owner": [3, null, null, 3], "meals_completed": [0, 1, 1, 0]}, {"number": 32, "time": 0.866, "message": "Philosopher 3 acquired fork 3.", "type": "acquire", "states": ["Hungry / Waiting", "Thinking", "Acquiring Forks", "Eating"], "fork_owner": [3, null, 2, 3], "meals_completed": [0, 1, 1, 0]}, {"number": 33, "time": 1.044, "message": "Philosopher 4 finished meal 1 and is releasing the forks.", "type": "release", "states": ["Hungry / Waiting", "Thinking", "Acquiring Forks", "Releasing Forks"], "fork_owner": [3, null, 2, 3], "meals_completed": [0, 1, 1, 1]}, {"number": 34, "time": 1.044, "message": "Philosopher 4 released fork 1.", "type": "release", "states": ["Hungry / Waiting", "Thinking", "Acquiring Forks", "Releasing Forks"], "fork_owner": [null, null, 2, 3], "meals_completed": [0, 1, 1, 1]}, {"number": 35, "time": 1.044, "message": "Philosopher 4 released fork 4.", "type": "release", "states": ["Hungry / Waiting", "Thinking", "Acquiring Forks", "Releasing Forks"], "fork_owner": [null, null, 2, null], "meals_completed": [0, 1, 1, 1]}, {"number": 36, "time": 1.044, "message": "Philosopher 4 released the room semaphore.", "type": "room", "states": ["Hungry / Waiting", "Thinking", "Acquiring Forks", "Releasing Forks"], "fork_owner": [null, null, 2, null], "meals_completed": [0, 1, 1, 1]}, {"number": 37, "time": 1.044, "message": "Philosopher 4 is thinking before meal 2.", "type": "thinking", "states": ["Hungry / Waiting", "Thinking", "Acquiring Forks", "Thinking"], "fork_owner": [null, null, 2, null], "meals_completed": [0, 1, 1, 1]}, {"number": 38, "time": 1.044, "message": "Philosopher 1 acquired fork 1.", "type": "acquire", "states": ["Acquiring Forks", "Thinking", "Acquiring Forks", "Thinking"], "fork_owner": [0, null, 2, null], "meals_completed": [0, 1, 1, 1]}, {"number": 39, "time": 1.044, "message": "Philosopher 1 acquired fork 2 and starts eating meal 1.", "type": "eat", "states": ["Eating", "Thinking", "Acquiring Forks", "Thinking"], "fork_owner": [0, 0, 2, null], "meals_completed": [0, 1, 1, 1]}, {"number": 40, "time": 1.044, "message": "Philosopher 3 acquired fork 4 and starts eating meal 2.", "type": "eat", "states": ["Eating", "Thinking", "Eating", "Thinking"], "fork_owner": [0, 0, 2, 2], "meals_completed": [0, 1, 1, 1]}, {"number": 41, "time": 1.092, "message": "Philosopher 2 is hungry and requests forks 2 and 3.", "type": "hungry", "states": ["Eating", "Hungry / Waiting", "Eating", "Thinking"], "fork_owner": [0, 0, 2, 2], "meals_completed": [0, 1, 1, 1]}, {"number": 42, "time": 1.092, "message": "Philosopher 2 entered the room semaphore.", "type": "room", "states": ["Eating", "Hungry / Waiting", "Eating", "Thinking"], "fork_owner": [0, 0, 2, 2], "meals_completed": [0, 1, 1, 1]}, {"number": 43, "time": 1.35, "message": "Philosopher 1 finished meal 1 and is releasing the forks.", "type": "release", "states": ["Releasing Forks", "Hungry / Waiting", "Eating", "Thinking"], "fork_owner": [0, 0, 2, 2], "meals_completed": [1, 1, 1, 1]}, {"number": 44, "time": 1.35, "message": "Philosopher 1 released fork 2.", "type": "release", "states": ["Releasing Forks", "Hungry / Waiting", "Eating", "Thinking"], "fork_owner": [0, null, 2, 2], "meals_completed": [1, 1, 1, 1]}, {"number": 45, "time": 1.35, "message": "Philosopher 1 released fork 1.", "type": "release", "states": ["Releasing Forks", "Hungry / Waiting", "Eating", "Thinking"], "fork_owner": [null, null, 2, 2], "meals_completed": [1, 1, 1, 1]}, {"number": 46, "time": 1.35, "message": "Philosopher 1 released the room semaphore.", "type": "room", "states": ["Releasing Forks", "Hungry / Waiting", "Eating", "Thinking"], "fork_owner": [null, null, 2, 2], "meals_completed": [1, 1, 1, 1]}, {"number": 47, "time": 1.35, "message": "Philosopher 1 is thinking before meal 2.", "type": "thinking", "states": ["Thinking", "Hungry / Waiting", "Eating", "Thinking"], "fork_owner": [null, null, 2, 2], "meals_completed": [1, 1, 1, 1]}, {"number": 48, "time": 1.35, "message": "Philosopher 2 acquired fork 2.", "type": "acquire", "states": ["Thinking", "Acquiring Forks", "Eating", "Thinking"], "fork_owner": [null, 1, 2, 2], "meals_completed": [1, 1, 1, 1]}, {"number": 49, "time": 1.379, "message": "Philosopher 3 finished meal 2 and is releasing the forks.", "type": "release", "states": ["Thinking", "Acquiring Forks", "Releasing Forks", "Thinking"], "fork_owner": [null, 1, 2, 2], "meals_completed": [1, 1, 2, 1]}, {"number": 50, "time": 1.379, "message": "Philosopher 3 released fork 4.", "type": "release", "states": ["Thinking", "Acquiring Forks", "Releasing Forks", "Thinking"], "fork_owner": [null, 1, 2, null], "meals_completed": [1, 1, 2, 1]}, {"number": 51, "time": 1.379, "message": "Philosopher 3 released fork 3.", "type": "release", "states": ["Thinking", "Acquiring Forks", "Releasing Forks", "Thinking"], "fork_owner": [null, 1, null, null], "meals_completed": [1, 1, 2, 1]}, {"number": 52, "time": 1.379, "message": "Philosopher 3 released the room semaphore.", "type": "room", "states": ["Thinking", "Acquiring Forks", "Releasing Forks", "Thinking"], "fork_owner": [null, 1, null, null], "meals_completed": [1, 1, 2, 1]}, {"number": 53, "time": 1.379, "message": "Philosopher 3 completed all meals.", "type": "finish", "states": ["Thinking", "Acquiring Forks", "Finished", "Thinking"], "fork_owner": [null, 1, null, null], "meals_completed": [1, 1, 2, 1]}, {"number": 54, "time": 1.38, "message": "Philosopher 2 acquired fork 3 and starts eating meal 2.", "type": "eat", "states": ["Thinking", "Eating", "Finished", "Thinking"], "fork_owner": [null, 1, 1, null], "meals_completed": [1, 1, 2, 1]}, {"number": 55, "time": 1.612, "message": "Philosopher 4 is hungry and requests forks 4 and 1.", "type": "hungry", "states": ["Thinking", "Eating", "Finished", "Hungry / Waiting"], "fork_owner": [null, 1, 1, null], "meals_completed": [1, 1, 2, 1]}, {"number": 56, "time": 1.612, "message": "Philosopher 4 entered the room semaphore.", "type": "room", "states": ["Thinking", "Eating", "Finished", "Hungry / Waiting"], "fork_owner": [null, 1, 1, null], "meals_completed": [1, 1, 2, 1]}, {"number": 57, "time": 1.612, "message": "Philosopher 4 acquired fork 4.", "type": "acquire", "states": ["Thinking", "Eating", "Finished", "Acquiring Forks"], "fork_owner": [null, 1, 1, 3], "meals_completed": [1, 1, 2, 1]}, {"number": 58, "time": 1.612, "message": "Philosopher 4 acquired fork 1 and starts eating meal 2.", "type": "eat", "states": ["Thinking", "Eating", "Finished", "Eating"], "fork_owner": [3, 1, 1, 3], "meals_completed": [1, 1, 2, 1]}, {"number": 59, "time": 1.63, "message": "Philosopher 1 is hungry and requests forks 1 and 2.", "type": "hungry", "states": ["Hungry / Waiting", "Eating", "Finished", "Eating"], "fork_owner": [3, 1, 1, 3], "meals_completed": [1, 1, 2, 1]}, {"number": 60, "time": 1.63, "message": "Philosopher 1 entered the room semaphore.", "type": "room", "states": ["Hungry / Waiting", "Eating", "Finished", "Eating"], "fork_owner": [3, 1, 1, 3], "meals_completed": [1, 1, 2, 1]}, {"number": 61, "time": 1.639, "message": "Philosopher 2 finished meal 2 and is releasing the forks.", "type": "release", "states": ["Hungry / Waiting", "Releasing Forks", "Finished", "Eating"], "fork_owner": [3, 1, 1, 3], "meals_completed": [1, 2, 2, 1]}, {"number": 62, "time": 1.639, "message": "Philosopher 2 released fork 3.", "type": "release", "states": ["Hungry / Waiting", "Releasing Forks", "Finished", "Eating"], "fork_owner": [3, 1, null, 3], "meals_completed": [1, 2, 2, 1]}, {"number": 63, "time": 1.639, "message": "Philosopher 2 released fork 2.", "type": "release", "states": ["Hungry / Waiting", "Releasing Forks", "Finished", "Eating"], "fork_owner": [3, null, null, 3], "meals_completed": [1, 2, 2, 1]}, {"number": 64, "time": 1.639, "message": "Philosopher 2 released the room semaphore.", "type": "room", "states": ["Hungry / Waiting", "Releasing Forks", "Finished", "Eating"], "fork_owner": [3, null, null, 3], "meals_completed": [1, 2, 2, 1]}, {"number": 65, "time": 1.639, "message": "Philosopher 2 completed all meals.", "type": "finish", "states": ["Hungry / Waiting", "Finished", "Finished", "Eating"], "fork_owner": [3, null, null, 3], "meals_completed": [1, 2, 2, 1]}, {"number": 66, "time": 1.942, "message": "Philosopher 4 finished meal 2 and is releasing the forks.", "type": "release", "states": ["Hungry / Waiting", "Finished", "Finished", "Releasing Forks"], "fork_owner": [3, null, null, 3], "meals_completed": [1, 2, 2, 2]}, {"number": 67, "time": 1.942, "message": "Philosopher 4 released fork 1.", "type": "release", "states": ["Hungry / Waiting", "Finished", "Finished", "Releasing Forks"], "fork_owner": [null, null, null, 3], "meals_completed": [1, 2, 2, 2]}, {"number": 68, "time": 1.942, "message": "Philosopher 4 released fork 4.", "type": "release", "states": ["Hungry / Waiting", "Finished", "Finished", "Releasing Forks"], "fork_owner": [null, null, null, null], "meals_completed": [1, 2, 2, 2]}, {"number": 69, "time": 1.942, "message": "Philosopher 4 released the room semaphore.", "type": "room", "states": ["Hungry / Waiting", "Finished", "Finished", "Releasing Forks"], "fork_owner": [null, null, null, null], "meals_completed": [1, 2, 2, 2]}, {"number": 70, "time": 1.942, "message": "Philosopher 4 completed all meals.", "type": "finish", "states": ["Hungry / Waiting", "Finished", "Finished", "Finished"], "fork_owner": [null, null, null, null], "meals_completed": [1, 2, 2, 2]}, {"number": 71, "time": 1.942, "message": "Philosopher 1 acquired fork 1.", "type": "acquire", "states": ["Acquiring Forks", "Finished", "Finished", "Finished"], "fork_owner": [0, null, null, null], "meals_completed": [1, 2, 2, 2]}, {"number": 72, "time": 1.943, "message": "Philosopher 1 acquired fork 2 and starts eating meal 2.", "type": "eat", "states": ["Eating", "Finished", "Finished", "Finished"], "fork_owner": [0, 0, null, null], "meals_completed": [1, 2, 2, 2]}, {"number": 73, "time": 2.28, "message": "Philosopher 1 finished meal 2 and is releasing the forks.", "type": "release", "states": ["Releasing Forks", "Finished", "Finished", "Finished"], "fork_owner": [0, 0, null, null], "meals_completed": [2, 2, 2, 2]}, {"number": 74, "time": 2.28, "message": "Philosopher 1 released fork 2.", "type": "release", "states": ["Releasing Forks", "Finished", "Finished", "Finished"], "fork_owner": [0, null, null, null], "meals_completed": [2, 2, 2, 2]}, {"number": 75, "time": 2.28, "message": "Philosopher 1 released fork 1.", "type": "release", "states": ["Releasing Forks", "Finished", "Finished", "Finished"], "fork_owner": [null, null, null, null], "meals_completed": [2, 2, 2, 2]}, {"number": 76, "time": 2.28, "message": "Philosopher 1 released the room semaphore.", "type": "room", "states": ["Releasing Forks", "Finished", "Finished", "Finished"], "fork_owner": [null, null, null, null], "meals_completed": [2, 2, 2, 2]}, {"number": 77, "time": 2.28, "message": "Philosopher 1 completed all meals.", "type": "finish", "states": ["Finished", "Finished", "Finished", "Finished"], "fork_owner": [null, null, null, null], "meals_completed": [2, 2, 2, 2]}, {"number": 78, "time": 2.28, "message": "Simulation completed. All philosophers finished.", "type": "finish", "states": ["Finished", "Finished", "Finished", "Finished"], "fork_owner": [null, null, null, null], "meals_completed": [2, 2, 2, 2]}];
+let current = 0;
+let timer = null;
+
+function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+    }[c]));
+}
+
+function render() {
+    const e = events[current];
+    if (!e) return;
+
+    document.getElementById("eventNumber").textContent =
+        (current + 1) + " / " + events.length;
+
+    document.getElementById("eating").textContent =
+        e.states.filter(s => s === "Eating").length;
+
+    document.getElementById("forksUsed").textContent =
+        e.fork_owner.filter(x => x !== null).length + " / 4";
+
+    document.getElementById("meals").textContent =
+        e.meals_completed.reduce((a, b) => a + b, 0);
+
+    e.states.forEach((s, i) => {
+        const el = document.getElementById("p" + i);
+        el.innerHTML =
+            "<strong>Philosopher " + (i + 1) + "</strong>" +
+            esc(s) + "<br>Meals: " + e.meals_completed[i];
+
+        el.style.background =
+            s === "Eating" ? "#bbf7d0" :
+            s === "Hungry / Waiting" ? "#fef3c7" :
+            s === "Acquiring Forks" ? "#fed7aa" :
+            s === "Finished" ? "#ddd6fe" : "#e2e8f0";
+    });
+
+    e.fork_owner.forEach((owner, i) => {
+        const el = document.getElementById("f" + i);
+        el.innerHTML = "Fork " + (i + 1) + "<br>" +
+            (owner === null ? "AVAILABLE" : "Held by P" + (owner + 1));
+
+        el.style.background = owner === null ? "#dcfce7" : "#fee2e2";
+        el.style.borderColor = owner === null ? "#16a34a" : "#dc2626";
+    });
+
+    document.getElementById("eventType").textContent = e.type;
+    document.getElementById("eventTitle").textContent = "Event " + e.number;
+    document.getElementById("eventMessage").textContent = e.message;
+    document.getElementById("eventTime").textContent =
+        "Elapsed time: " + e.time + " seconds";
+
+    document.getElementById("progress").textContent =
+        "Displaying event " + (current + 1) + " of " + events.length;
+
+    document.getElementById("timeline").value = current;
+    document.getElementById("playButton").disabled =
+        current >= events.length - 1;
+
+    document.getElementById("threadGrid").innerHTML =
+        e.states.map((s, i) =>
+            "<div class='thread'><strong>Philosopher " + (i + 1) +
+            "</strong>" + esc(s) + "<br>Meals completed: " +
+            e.meals_completed[i] + "</div>"
+        ).join("");
+
+    document.getElementById("eventList").innerHTML =
+        events.map((x, i) =>
+            "<div class='event-row " + (i === current ? "current" : "") +
+            "' onclick='goTo(" + i + ")'><b>Event " + x.number +
+            "</b> · " + x.time + "s<br>" + esc(x.message) + "</div>"
+        ).join("");
+
+    const selected = document.querySelector(".event-row.current");
+    if (selected) selected.scrollIntoView({block: "nearest"});
+}
+
+function goTo(value) {
+    pause();
+    current = Math.max(0, Math.min(Number(value), events.length - 1));
+    render();
+}
+
+function next() {
+    pause();
+    if (current < events.length - 1) {
+        current++;
+        render();
+    }
+}
+
+function previous() {
+    pause();
+    if (current > 0) {
+        current--;
+        render();
+    }
+}
+
+function reset() {
+    pause();
+    current = 0;
+    render();
+}
+
+function play() {
+    pause();
+
+    if (current >= events.length - 1) {
+        current = 0;
+        render();
+    }
+
+    timer = setInterval(() => {
+        if (current >= events.length - 1) {
+            pause();
+            return;
+        }
+        current++;
+        render();
+    }, 800);
+}
+
+function pause() {
+    if (timer !== null) {
+        clearInterval(timer);
+        timer = null;
+    }
+}
+
+document.getElementById("timeline").max = events.length - 1;
+render();
+</script>
+
+</body>
+</html>
