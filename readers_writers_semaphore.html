@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Readers-Writers Semaphore Visualization</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 24px;
+    font-family: Arial, sans-serif;
+    background: #f1f5f9;
+    color: #172033;
+}
+
+h1, h2 {
+    margin-top: 0;
+}
+
+header {
+    background: #172554;
+    color: white;
+    padding: 24px;
+    border-radius: 14px;
+    margin-bottom: 20px;
+}
+
+header p {
+    line-height: 1.6;
+}
+
+.panel {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    box-shadow: 0 3px 12px #0000000b;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.metric {
+    background: #f8fafc;
+    padding: 16px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+}
+
+.metric span {
+    display: block;
+    font-size: 13px;
+    color: #64748b;
+    margin-bottom: 8px;
+}
+
+.metric strong {
+    font-size: 25px;
+    overflow-wrap: anywhere;
+}
+
+#resource {
+    padding: 16px;
+    border-radius: 10px;
+    background: #dcfce7;
+    color: #166534;
+    font-weight: bold;
+    margin-top: 12px;
+}
+
+button {
+    padding: 10px 16px;
+    margin: 4px;
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+    background: #1d4ed8;
+    color: white;
+    font-weight: bold;
+}
+
+button:hover {
+    background: #1e40af;
+}
+
+button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+input[type="range"] {
+    width: 100%;
+    margin: 16px 0;
+}
+
+#eventMessage {
+    font-size: 18px;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+}
+
+#eventType {
+    display: inline-block;
+    background: #dbeafe;
+    color: #1e40af;
+    padding: 6px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.thread-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+}
+
+.thread {
+    padding: 14px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    background: #f8fafc;
+}
+
+.thread strong {
+    display: block;
+    margin-bottom: 8px;
+}
+
+.thread .state {
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+#eventList {
+    max-height: 420px;
+    overflow-y: auto;
+}
+
+.event-row {
+    border-left: 4px solid #94a3b8;
+    padding: 10px 12px;
+    margin: 8px 0;
+    background: #f8fafc;
+    border-radius: 0 8px 8px 0;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.event-row.current {
+    background: #dbeafe;
+    border-left-color: #2563eb;
+}
+
+.small {
+    color: #64748b;
+    font-size: 13px;
+}
+
+.explanation li {
+    margin: 10px 0;
+    line-height: 1.5;
+}
+
+@media (max-width: 600px) {
+    body {
+        padding: 12px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>Readers-Writers Problem</h1>
+    <p>
+        Synchronization using a binary semaphore and a reader-count lock.
+        Multiple readers may access the database together, but a writer
+        needs exclusive access.
+    </p>
+    <p id="progress">Loading execution...</p>
+</header>
+
+<section class="panel">
+    <h2>System status</h2>
+
+    <div class="grid">
+        <div class="metric">
+            <span>Current event</span>
+            <strong id="eventNumber">0</strong>
+        </div>
+
+        <div class="metric">
+            <span>Active readers</span>
+            <strong id="activeReaders">0</strong>
+        </div>
+
+        <div class="metric">
+            <span>Waiting readers</span>
+            <strong id="waitingReaders">0</strong>
+        </div>
+
+        <div class="metric">
+            <span>Waiting writers</span>
+            <strong id="waitingWriters">0</strong>
+        </div>
+
+        <div class="metric">
+            <span>Database value</span>
+            <strong id="databaseValue">100</strong>
+        </div>
+
+        <div class="metric">
+            <span>Database version</span>
+            <strong id="version">0</strong>
+        </div>
+    </div>
+
+    <div id="resource">Shared resource: Available</div>
+    <p id="writerStatus">Active writer: None</p>
+</section>
+
+<section class="panel">
+    <h2>Execution controls</h2>
+
+    <button id="playButton" onclick="play()">Play</button>
+    <button onclick="pause()">Pause</button>
+    <button onclick="previous()">Previous</button>
+    <button onclick="next()">Next</button>
+    <button onclick="reset()">Reset</button>
+
+    <input id="timeline" type="range" min="0" max="0"
+           value="0" oninput="goTo(this.value)">
+
+    <p class="small">
+        Move the slider to inspect individual execution events.
+    </p>
+
+    <span id="eventType">Start</span>
+    <h3 id="eventTitle">Waiting to begin</h3>
+    <p id="eventMessage">Press Play or Next to inspect the execution.</p>
+    <p class="small" id="eventTime"></p>
+</section>
+
+<section class="panel">
+    <h2>Thread activity</h2>
+    <div class="thread-grid" id="threadGrid"></div>
+</section>
+
+<section class="panel">
+    <h2>Execution event history</h2>
+    <p class="small">
+        Select an event to inspect that point in the execution.
+    </p>
+    <div id="eventList"></div>
+</section>
+
+
+
+<script>
+const events = [{"number": 1, "time": 0.0, "message": "Simulation started. The shared database is available.", "type": "start", "reader_count": 0, "active_readers": 0, "active_writer": null, "waiting_readers": 0, "waiting_writers": 0, "database_value": 100, "version": 0}, {"number": 2, "time": 0.0, "message": "Reader 4 has been created and is ready.", "type": "info", "reader_count": 0, "active_readers": 0, "active_writer": null, "waiting_readers": 0, "waiting_writers": 0, "database_value": 100, "version": 0}, {"number": 3, "time": 0.0, "message": "Reader 4, operation 1: requests permission to read.", "type": "request", "reader_count": 0, "active_readers": 0, "active_writer": null, "waiting_readers": 1, "waiting_writers": 0, "database_value": 100, "version": 0}, {"number": 4, "time": 0.0, "message": "Reader 4: reader count increased to 1.", "type": "lock", "reader_count": 1, "active_readers": 0, "active_writer": null, "waiting_readers": 1, "waiting_writers": 0, "database_value": 100, "version": 0}, {"number": 5, "time": 0.0, "message": "Reader 4: first reader detected. Requesting the resource semaphore.", "type": "request", "reader_count": 1, "active_readers": 0, "active_writer": null, "waiting_readers": 1, "waiting_writers": 0, "database_value": 100, "version": 0}, {"number": 6, "time": 0.0, "message": "Reader 4: acquired the resource semaphore. Writers cannot enter.", "type": "lock", "reader_count": 1, "active_readers": 0, "active_writer": null, "waiting_readers": 1, "waiting_writers": 0, "database_value": 100, "version": 0}, {"number": 7, "time": 0.0, "message": "Reader 4 starts reading operation 1. Multiple readers may read together.", "type": "read", "reader_count": 1, "active_readers": 1, "active_writer": null, "waiting_readers": 0, "waiting_writers": 0, "database_value": 100, "version": 0}, {"number": 8, "time": 0.0, "message": "Writer 2 has been created and is ready.", "type": "info", "reader_count": 1, "active_readers": 1, "active_writer": null, "waiting_readers": 0, "waiting_writers": 0, "database_value": 100, "version": 0}, {"number": 9, "time": 0.0, "message": "Writer 2, operation 1: requests exclusive access to the database.", "type": "request", "reader_count": 1, "active_readers": 1, "active_writer": null, "waiting_readers": 0, "waiting_writers": 1, "database_value": 100, "version": 0}, {"number": 10, "time": 0.0, "message": "Writer 2 is waiting for the resource semaphore.", "type": "wait", "reader_count": 1, "active_readers": 1, "active_writer": null, "waiting_readers": 0, "waiting_writers": 1, "database_value": 100, "version": 0}, {"number": 11, "time": 0.0, "message": "Reader 3 has been created and is ready.", "type": "info", "reader_count": 1, "active_readers": 1, "active_writer": null, "waiting_readers": 0, "waiting_writers": 1, "database_value": 100, "version": 0}, {"number": 12, "time": 0.0, "message": "Reader 3, operation 1: requests permission to read.", "type": "request", "reader_count": 1, "active_readers": 1, "active_writer": null, "waiting_readers": 1, "waiting_writers": 1, "database_value": 100, "version": 0}, {"number": 13, "time": 0.0, "message": "Reader 3: reader count increased to 2.", "type": "lock", "reader_count": 2, "active_readers": 1, "active_writer": null, "waiting_readers": 1, "waiting_writers": 1, "database_value": 100, "version": 0}, {"number": 14, "time": 0.0, "message": "Reader 3 starts reading operation 1. Multiple readers may read together.", "type": "read", "reader_count": 2, "active_readers": 2, "active_writer": null, "waiting_readers": 0, "waiting_writers": 1, "database_value": 100, "version": 0}, {"number": 15, "time": 0.0, "message": "Writer 1 has been created and is ready.", "type": "info", "reader_count": 2, "active_readers": 2, "active_writer": null, "waiting_readers": 0, "waiting_writers": 1, "database_value": 100, "version": 0}, {"number": 16, "time": 0.0, "message": "Writer 1, operation 1: requests exclusive access to the database.", "type": "request", "reader_count": 2, "active_readers": 2, "active_writer": null, "waiting_readers": 0, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 17, "time": 0.0, "message": "Writer 1 is waiting for the resource semaphore.", "type": "wait", "reader_count": 2, "active_readers": 2, "active_writer": null, "waiting_readers": 0, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 18, "time": 0.0, "message": "Reader 2 has been created and is ready.", "type": "info", "reader_count": 2, "active_readers": 2, "active_writer": null, "waiting_readers": 0, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 19, "time": 0.0, "message": "Reader 2, operation 1: requests permission to read.", "type": "request", "reader_count": 2, "active_readers": 2, "active_writer": null, "waiting_readers": 1, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 20, "time": 0.0, "message": "Reader 2: reader count increased to 3.", "type": "lock", "reader_count": 3, "active_readers": 2, "active_writer": null, "waiting_readers": 1, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 21, "time": 0.0, "message": "Reader 2 starts reading operation 1. Multiple readers may read together.", "type": "read", "reader_count": 3, "active_readers": 3, "active_writer": null, "waiting_readers": 0, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 22, "time": 0.0, "message": "Reader 5 has been created and is ready.", "type": "info", "reader_count": 3, "active_readers": 3, "active_writer": null, "waiting_readers": 0, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 23, "time": 0.0, "message": "Reader 5, operation 1: requests permission to read.", "type": "request", "reader_count": 3, "active_readers": 3, "active_writer": null, "waiting_readers": 1, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 24, "time": 0.0, "message": "Reader 5: reader count increased to 4.", "type": "lock", "reader_count": 4, "active_readers": 3, "active_writer": null, "waiting_readers": 1, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 25, "time": 0.0, "message": "Reader 5 starts reading operation 1. Multiple readers may read together.", "type": "read", "reader_count": 4, "active_readers": 4, "active_writer": null, "waiting_readers": 0, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 26, "time": 0.0, "message": "Writer 3 has been created and is ready.", "type": "info", "reader_count": 4, "active_readers": 4, "active_writer": null, "waiting_readers": 0, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 27, "time": 0.0, "message": "Writer 3, operation 1: requests exclusive access to the database.", "type": "request", "reader_count": 4, "active_readers": 4, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 28, "time": 0.0, "message": "Writer 3 is waiting for the resource semaphore.", "type": "wait", "reader_count": 4, "active_readers": 4, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 29, "time": 0.0, "message": "Reader 1 has been created and is ready.", "type": "info", "reader_count": 4, "active_readers": 4, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 30, "time": 0.0, "message": "Reader 1, operation 1: requests permission to read.", "type": "request", "reader_count": 4, "active_readers": 4, "active_writer": null, "waiting_readers": 1, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 31, "time": 0.0, "message": "Reader 1: reader count increased to 5.", "type": "lock", "reader_count": 5, "active_readers": 4, "active_writer": null, "waiting_readers": 1, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 32, "time": 0.0, "message": "Reader 1 starts reading operation 1. Multiple readers may read together.", "type": "read", "reader_count": 5, "active_readers": 5, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 33, "time": 0.0, "message": "Reader 6 has been created and is ready.", "type": "info", "reader_count": 5, "active_readers": 5, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 34, "time": 0.0, "message": "Reader 6, operation 1: requests permission to read.", "type": "request", "reader_count": 5, "active_readers": 5, "active_writer": null, "waiting_readers": 1, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 35, "time": 0.0, "message": "Reader 6: reader count increased to 6.", "type": "lock", "reader_count": 6, "active_readers": 5, "active_writer": null, "waiting_readers": 1, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 36, "time": 0.0, "message": "Reader 6 starts reading operation 1. Multiple readers may read together.", "type": "read", "reader_count": 6, "active_readers": 6, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 37, "time": 0.156, "message": "Reader 5 completed operation 1: read database value 100, version 0.", "type": "read", "reader_count": 6, "active_readers": 6, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 38, "time": 0.156, "message": "Reader 5 finished reading. Reader count is now 5.", "type": "lock", "reader_count": 5, "active_readers": 5, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 39, "time": 0.166, "message": "Reader 6 completed operation 1: read database value 100, version 0.", "type": "read", "reader_count": 5, "active_readers": 5, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 40, "time": 0.166, "message": "Reader 6 finished reading. Reader count is now 4.", "type": "lock", "reader_count": 4, "active_readers": 4, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 41, "time": 0.166, "message": "Reader 2 completed operation 1: read database value 100, version 0.", "type": "read", "reader_count": 4, "active_readers": 4, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 42, "time": 0.166, "message": "Reader 2 finished reading. Reader count is now 3.", "type": "lock", "reader_count": 3, "active_readers": 3, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 43, "time": 0.186, "message": "Reader 3 completed operation 1: read database value 100, version 0.", "type": "read", "reader_count": 3, "active_readers": 3, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 44, "time": 0.186, "message": "Reader 3 finished reading. Reader count is now 2.", "type": "lock", "reader_count": 2, "active_readers": 2, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 45, "time": 0.2, "message": "Reader 4 completed operation 1: read database value 100, version 0.", "type": "read", "reader_count": 2, "active_readers": 2, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 46, "time": 0.2, "message": "Reader 4 finished reading. Reader count is now 1.", "type": "lock", "reader_count": 1, "active_readers": 1, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 47, "time": 0.274, "message": "Reader 1 completed operation 1: read database value 100, version 0.", "type": "read", "reader_count": 1, "active_readers": 1, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 48, "time": 0.274, "message": "Reader 1 finished reading. Reader count is now 0.", "type": "lock", "reader_count": 0, "active_readers": 0, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 49, "time": 0.274, "message": "Reader 1: last reader has left. Resource semaphore released; a writer may enter.", "type": "release", "reader_count": 0, "active_readers": 0, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 50, "time": 0.274, "message": "Reader 6, operation 2: requests permission to read.", "type": "request", "reader_count": 0, "active_readers": 0, "active_writer": null, "waiting_readers": 1, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 51, "time": 0.274, "message": "Reader 6: reader count increased to 1.", "type": "lock", "reader_count": 1, "active_readers": 0, "active_writer": null, "waiting_readers": 1, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 52, "time": 0.274, "message": "Reader 6: first reader detected. Requesting the resource semaphore.", "type": "request", "reader_count": 1, "active_readers": 0, "active_writer": null, "waiting_readers": 1, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 53, "time": 0.274, "message": "Reader 6: acquired the resource semaphore. Writers cannot enter.", "type": "lock", "reader_count": 1, "active_readers": 0, "active_writer": null, "waiting_readers": 1, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 54, "time": 0.274, "message": "Reader 6 starts reading operation 2. Multiple readers may read together.", "type": "read", "reader_count": 1, "active_readers": 1, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 55, "time": 0.332, "message": "Reader 5, operation 2: requests permission to read.", "type": "request", "reader_count": 1, "active_readers": 1, "active_writer": null, "waiting_readers": 1, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 56, "time": 0.332, "message": "Reader 5: reader count increased to 2.", "type": "lock", "reader_count": 2, "active_readers": 1, "active_writer": null, "waiting_readers": 1, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 57, "time": 0.332, "message": "Reader 5 starts reading operation 2. Multiple readers may read together.", "type": "read", "reader_count": 2, "active_readers": 2, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 58, "time": 0.35, "message": "Reader 3, operation 2: requests permission to read.", "type": "request", "reader_count": 2, "active_readers": 2, "active_writer": null, "waiting_readers": 1, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 59, "time": 0.35, "message": "Reader 3: reader count increased to 3.", "type": "lock", "reader_count": 3, "active_readers": 2, "active_writer": null, "waiting_readers": 1, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 60, "time": 0.35, "message": "Reader 3 starts reading operation 2. Multiple readers may read together.", "type": "read", "reader_count": 3, "active_readers": 3, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 61, "time": 0.376, "message": "Reader 4, operation 2: requests permission to read.", "type": "request", "reader_count": 3, "active_readers": 3, "active_writer": null, "waiting_readers": 1, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 62, "time": 0.376, "message": "Reader 4: reader count increased to 4.", "type": "lock", "reader_count": 4, "active_readers": 3, "active_writer": null, "waiting_readers": 1, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 63, "time": 0.376, "message": "Reader 4 starts reading operation 2. Multiple readers may read together.", "type": "read", "reader_count": 4, "active_readers": 4, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 64, "time": 0.387, "message": "Reader 2, operation 2: requests permission to read.", "type": "request", "reader_count": 4, "active_readers": 4, "active_writer": null, "waiting_readers": 1, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 65, "time": 0.387, "message": "Reader 2: reader count increased to 5.", "type": "lock", "reader_count": 5, "active_readers": 4, "active_writer": null, "waiting_readers": 1, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 66, "time": 0.387, "message": "Reader 2 starts reading operation 2. Multiple readers may read together.", "type": "read", "reader_count": 5, "active_readers": 5, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 67, "time": 0.403, "message": "Reader 1, operation 2: requests permission to read.", "type": "request", "reader_count": 5, "active_readers": 5, "active_writer": null, "waiting_readers": 1, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 68, "time": 0.403, "message": "Reader 1: reader count increased to 6.", "type": "lock", "reader_count": 6, "active_readers": 5, "active_writer": null, "waiting_readers": 1, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 69, "time": 0.403, "message": "Reader 1 starts reading operation 2. Multiple readers may read together.", "type": "read", "reader_count": 6, "active_readers": 6, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 70, "time": 0.612, "message": "Reader 5 completed operation 2: read database value 100, version 0.", "type": "read", "reader_count": 6, "active_readers": 6, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 71, "time": 0.612, "message": "Reader 5 finished reading. Reader count is now 5.", "type": "lock", "reader_count": 5, "active_readers": 5, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 72, "time": 0.656, "message": "Reader 6 completed operation 2: read database value 100, version 0.", "type": "read", "reader_count": 5, "active_readers": 5, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 73, "time": 0.656, "message": "Reader 6 finished reading. Reader count is now 4.", "type": "lock", "reader_count": 4, "active_readers": 4, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 74, "time": 0.694, "message": "Reader 1 completed operation 2: read database value 100, version 0.", "type": "read", "reader_count": 4, "active_readers": 4, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 75, "time": 0.694, "message": "Reader 1 finished reading. Reader count is now 3.", "type": "lock", "reader_count": 3, "active_readers": 3, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 76, "time": 0.703, "message": "Reader 4 completed operation 2: read database value 100, version 0.", "type": "read", "reader_count": 3, "active_readers": 3, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 77, "time": 0.703, "message": "Reader 4 finished reading. Reader count is now 2.", "type": "lock", "reader_count": 2, "active_readers": 2, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 78, "time": 0.729, "message": "Reader 2 completed operation 2: read database value 100, version 0.", "type": "read", "reader_count": 2, "active_readers": 2, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 79, "time": 0.729, "message": "Reader 2 finished reading. Reader count is now 1.", "type": "lock", "reader_count": 1, "active_readers": 1, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 80, "time": 0.737, "message": "Reader 3 completed operation 2: read database value 100, version 0.", "type": "read", "reader_count": 1, "active_readers": 1, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 81, "time": 0.737, "message": "Reader 3 finished reading. Reader count is now 0.", "type": "lock", "reader_count": 0, "active_readers": 0, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 82, "time": 0.737, "message": "Reader 3: last reader has left. Resource semaphore released; a writer may enter.", "type": "release", "reader_count": 0, "active_readers": 0, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 100, "version": 0}, {"number": 83, "time": 0.737, "message": "Writer 1 acquired the semaphore. Exclusive writing access granted.", "type": "lock", "reader_count": 0, "active_readers": 0, "active_writer": 1, "waiting_readers": 0, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 84, "time": 0.737, "message": "Writer 1 starts writing operation 1.", "type": "write", "reader_count": 0, "active_readers": 0, "active_writer": 1, "waiting_readers": 0, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 85, "time": 0.767, "message": "Reader 5, operation 3: requests permission to read.", "type": "request", "reader_count": 0, "active_readers": 0, "active_writer": 1, "waiting_readers": 1, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 86, "time": 0.767, "message": "Reader 5: reader count increased to 1.", "type": "lock", "reader_count": 1, "active_readers": 0, "active_writer": 1, "waiting_readers": 1, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 87, "time": 0.767, "message": "Reader 5: first reader detected. Requesting the resource semaphore.", "type": "request", "reader_count": 1, "active_readers": 0, "active_writer": 1, "waiting_readers": 1, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 88, "time": 0.839, "message": "Reader 4, operation 3: requests permission to read.", "type": "request", "reader_count": 1, "active_readers": 0, "active_writer": 1, "waiting_readers": 2, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 89, "time": 0.843, "message": "Reader 6, operation 3: requests permission to read.", "type": "request", "reader_count": 1, "active_readers": 0, "active_writer": 1, "waiting_readers": 3, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 90, "time": 0.862, "message": "Reader 1, operation 3: requests permission to read.", "type": "request", "reader_count": 1, "active_readers": 0, "active_writer": 1, "waiting_readers": 4, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 91, "time": 0.906, "message": "Reader 2, operation 3: requests permission to read.", "type": "request", "reader_count": 1, "active_readers": 0, "active_writer": 1, "waiting_readers": 5, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 92, "time": 0.924, "message": "Reader 3, operation 3: requests permission to read.", "type": "request", "reader_count": 1, "active_readers": 0, "active_writer": 1, "waiting_readers": 6, "waiting_writers": 2, "database_value": 100, "version": 0}, {"number": 93, "time": 1.047, "message": "Writer 1 updated the database from 100 to 120. Database version is now 1.", "type": "write", "reader_count": 1, "active_readers": 0, "active_writer": 1, "waiting_readers": 6, "waiting_writers": 2, "database_value": 120, "version": 1}, {"number": 94, "time": 1.047, "message": "Writer 1 completed writing operation 1.", "type": "write", "reader_count": 1, "active_readers": 0, "active_writer": 1, "waiting_readers": 6, "waiting_writers": 2, "database_value": 120, "version": 1}, {"number": 95, "time": 1.047, "message": "Writer 1 released the resource semaphore. Other threads may now proceed.", "type": "release", "reader_count": 1, "active_readers": 0, "active_writer": null, "waiting_readers": 6, "waiting_writers": 2, "database_value": 120, "version": 1}, {"number": 96, "time": 1.047, "message": "Writer 3 acquired the semaphore. Exclusive writing access granted.", "type": "lock", "reader_count": 1, "active_readers": 0, "active_writer": 3, "waiting_readers": 6, "waiting_writers": 1, "database_value": 120, "version": 1}, {"number": 97, "time": 1.047, "message": "Writer 3 starts writing operation 1.", "type": "write", "reader_count": 1, "active_readers": 0, "active_writer": 3, "waiting_readers": 6, "waiting_writers": 1, "database_value": 120, "version": 1}, {"number": 98, "time": 1.288, "message": "Writer 1, operation 2: requests exclusive access to the database.", "type": "request", "reader_count": 1, "active_readers": 0, "active_writer": 3, "waiting_readers": 6, "waiting_writers": 2, "database_value": 120, "version": 1}, {"number": 99, "time": 1.288, "message": "Writer 1 is waiting for the resource semaphore.", "type": "wait", "reader_count": 1, "active_readers": 0, "active_writer": 3, "waiting_readers": 6, "waiting_writers": 2, "database_value": 120, "version": 1}, {"number": 100, "time": 1.432, "message": "Writer 3 updated the database from 120 to 131. Database version is now 2.", "type": "write", "reader_count": 1, "active_readers": 0, "active_writer": 3, "waiting_readers": 6, "waiting_writers": 2, "database_value": 131, "version": 2}, {"number": 101, "time": 1.432, "message": "Writer 3 completed writing operation 1.", "type": "write", "reader_count": 1, "active_readers": 0, "active_writer": 3, "waiting_readers": 6, "waiting_writers": 2, "database_value": 131, "version": 2}, {"number": 102, "time": 1.432, "message": "Writer 3 released the resource semaphore. Other threads may now proceed.", "type": "release", "reader_count": 1, "active_readers": 0, "active_writer": null, "waiting_readers": 6, "waiting_writers": 2, "database_value": 131, "version": 2}, {"number": 103, "time": 1.432, "message": "Writer 2 acquired the semaphore. Exclusive writing access granted.", "type": "lock", "reader_count": 1, "active_readers": 0, "active_writer": 2, "waiting_readers": 6, "waiting_writers": 1, "database_value": 131, "version": 2}, {"number": 104, "time": 1.432, "message": "Writer 2 starts writing operation 1.", "type": "write", "reader_count": 1, "active_readers": 0, "active_writer": 2, "waiting_readers": 6, "waiting_writers": 1, "database_value": 131, "version": 2}, {"number": 105, "time": 1.646, "message": "Writer 3, operation 2: requests exclusive access to the database.", "type": "request", "reader_count": 1, "active_readers": 0, "active_writer": 2, "waiting_readers": 6, "waiting_writers": 2, "database_value": 131, "version": 2}, {"number": 106, "time": 1.646, "message": "Writer 3 is waiting for the resource semaphore.", "type": "wait", "reader_count": 1, "active_readers": 0, "active_writer": 2, "waiting_readers": 6, "waiting_writers": 2, "database_value": 131, "version": 2}, {"number": 107, "time": 1.805, "message": "Writer 2 updated the database from 131 to 143. Database version is now 3.", "type": "write", "reader_count": 1, "active_readers": 0, "active_writer": 2, "waiting_readers": 6, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 108, "time": 1.805, "message": "Writer 2 completed writing operation 1.", "type": "write", "reader_count": 1, "active_readers": 0, "active_writer": 2, "waiting_readers": 6, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 109, "time": 1.805, "message": "Writer 2 released the resource semaphore. Other threads may now proceed.", "type": "release", "reader_count": 1, "active_readers": 0, "active_writer": null, "waiting_readers": 6, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 110, "time": 1.805, "message": "Reader 5: acquired the resource semaphore. Writers cannot enter.", "type": "lock", "reader_count": 1, "active_readers": 0, "active_writer": null, "waiting_readers": 6, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 111, "time": 1.805, "message": "Reader 5 starts reading operation 3. Multiple readers may read together.", "type": "read", "reader_count": 1, "active_readers": 1, "active_writer": null, "waiting_readers": 5, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 112, "time": 1.805, "message": "Reader 4: reader count increased to 2.", "type": "lock", "reader_count": 2, "active_readers": 1, "active_writer": null, "waiting_readers": 5, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 113, "time": 1.805, "message": "Reader 4 starts reading operation 3. Multiple readers may read together.", "type": "read", "reader_count": 2, "active_readers": 2, "active_writer": null, "waiting_readers": 4, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 114, "time": 1.805, "message": "Reader 6: reader count increased to 3.", "type": "lock", "reader_count": 3, "active_readers": 2, "active_writer": null, "waiting_readers": 4, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 115, "time": 1.805, "message": "Reader 6 starts reading operation 3. Multiple readers may read together.", "type": "read", "reader_count": 3, "active_readers": 3, "active_writer": null, "waiting_readers": 3, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 116, "time": 1.806, "message": "Reader 1: reader count increased to 4.", "type": "lock", "reader_count": 4, "active_readers": 3, "active_writer": null, "waiting_readers": 3, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 117, "time": 1.806, "message": "Reader 1 starts reading operation 3. Multiple readers may read together.", "type": "read", "reader_count": 4, "active_readers": 4, "active_writer": null, "waiting_readers": 2, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 118, "time": 1.806, "message": "Reader 2: reader count increased to 5.", "type": "lock", "reader_count": 5, "active_readers": 4, "active_writer": null, "waiting_readers": 2, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 119, "time": 1.806, "message": "Reader 2 starts reading operation 3. Multiple readers may read together.", "type": "read", "reader_count": 5, "active_readers": 5, "active_writer": null, "waiting_readers": 1, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 120, "time": 1.806, "message": "Reader 3: reader count increased to 6.", "type": "lock", "reader_count": 6, "active_readers": 5, "active_writer": null, "waiting_readers": 1, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 121, "time": 1.806, "message": "Reader 3 starts reading operation 3. Multiple readers may read together.", "type": "read", "reader_count": 6, "active_readers": 6, "active_writer": null, "waiting_readers": 0, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 122, "time": 1.953, "message": "Writer 2, operation 2: requests exclusive access to the database.", "type": "request", "reader_count": 6, "active_readers": 6, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 143, "version": 3}, {"number": 123, "time": 1.953, "message": "Writer 2 is waiting for the resource semaphore.", "type": "wait", "reader_count": 6, "active_readers": 6, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 143, "version": 3}, {"number": 124, "time": 1.973, "message": "Reader 2 completed operation 3: read database value 143, version 3.", "type": "read", "reader_count": 6, "active_readers": 6, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 143, "version": 3}, {"number": 125, "time": 1.973, "message": "Reader 2 finished reading. Reader count is now 5.", "type": "lock", "reader_count": 5, "active_readers": 5, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 143, "version": 3}, {"number": 126, "time": 2.056, "message": "Reader 4 completed operation 3: read database value 143, version 3.", "type": "read", "reader_count": 5, "active_readers": 5, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 143, "version": 3}, {"number": 127, "time": 2.056, "message": "Reader 4 finished reading. Reader count is now 4.", "type": "lock", "reader_count": 4, "active_readers": 4, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 143, "version": 3}, {"number": 128, "time": 2.06, "message": "Reader 1 completed operation 3: read database value 143, version 3.", "type": "read", "reader_count": 4, "active_readers": 4, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 143, "version": 3}, {"number": 129, "time": 2.06, "message": "Reader 1 finished reading. Reader count is now 3.", "type": "lock", "reader_count": 3, "active_readers": 3, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 143, "version": 3}, {"number": 130, "time": 2.133, "message": "Reader 3 completed operation 3: read database value 143, version 3.", "type": "read", "reader_count": 3, "active_readers": 3, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 143, "version": 3}, {"number": 131, "time": 2.133, "message": "Reader 3 finished reading. Reader count is now 2.", "type": "lock", "reader_count": 2, "active_readers": 2, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 143, "version": 3}, {"number": 132, "time": 2.149, "message": "Reader 2 completed all three reading operations.", "type": "finish", "reader_count": 2, "active_readers": 2, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 143, "version": 3}, {"number": 133, "time": 2.172, "message": "Reader 6 completed operation 3: read database value 143, version 3.", "type": "read", "reader_count": 2, "active_readers": 2, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 143, "version": 3}, {"number": 134, "time": 2.172, "message": "Reader 6 finished reading. Reader count is now 1.", "type": "lock", "reader_count": 1, "active_readers": 1, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 143, "version": 3}, {"number": 135, "time": 2.18, "message": "Reader 5 completed operation 3: read database value 143, version 3.", "type": "read", "reader_count": 1, "active_readers": 1, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 143, "version": 3}, {"number": 136, "time": 2.18, "message": "Reader 5 finished reading. Reader count is now 0.", "type": "lock", "reader_count": 0, "active_readers": 0, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 143, "version": 3}, {"number": 137, "time": 2.18, "message": "Reader 5: last reader has left. Resource semaphore released; a writer may enter.", "type": "release", "reader_count": 0, "active_readers": 0, "active_writer": null, "waiting_readers": 0, "waiting_writers": 3, "database_value": 143, "version": 3}, {"number": 138, "time": 2.18, "message": "Writer 1 acquired the semaphore. Exclusive writing access granted.", "type": "lock", "reader_count": 0, "active_readers": 0, "active_writer": 1, "waiting_readers": 0, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 139, "time": 2.18, "message": "Writer 1 starts writing operation 2.", "type": "write", "reader_count": 0, "active_readers": 0, "active_writer": 1, "waiting_readers": 0, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 140, "time": 2.27, "message": "Reader 4 completed all three reading operations.", "type": "finish", "reader_count": 0, "active_readers": 0, "active_writer": 1, "waiting_readers": 0, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 141, "time": 2.289, "message": "Reader 3 completed all three reading operations.", "type": "finish", "reader_count": 0, "active_readers": 0, "active_writer": 1, "waiting_readers": 0, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 142, "time": 2.297, "message": "Reader 5 completed all three reading operations.", "type": "finish", "reader_count": 0, "active_readers": 0, "active_writer": 1, "waiting_readers": 0, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 143, "time": 2.31, "message": "Reader 1 completed all three reading operations.", "type": "finish", "reader_count": 0, "active_readers": 0, "active_writer": 1, "waiting_readers": 0, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 144, "time": 2.378, "message": "Reader 6 completed all three reading operations.", "type": "finish", "reader_count": 0, "active_readers": 0, "active_writer": 1, "waiting_readers": 0, "waiting_writers": 2, "database_value": 143, "version": 3}, {"number": 145, "time": 2.622, "message": "Writer 1 updated the database from 143 to 151. Database version is now 4.", "type": "write", "reader_count": 0, "active_readers": 0, "active_writer": 1, "waiting_readers": 0, "waiting_writers": 2, "database_value": 151, "version": 4}, {"number": 146, "time": 2.622, "message": "Writer 1 completed writing operation 2.", "type": "write", "reader_count": 0, "active_readers": 0, "active_writer": 1, "waiting_readers": 0, "waiting_writers": 2, "database_value": 151, "version": 4}, {"number": 147, "time": 2.622, "message": "Writer 1 released the resource semaphore. Other threads may now proceed.", "type": "release", "reader_count": 0, "active_readers": 0, "active_writer": null, "waiting_readers": 0, "waiting_writers": 2, "database_value": 151, "version": 4}, {"number": 148, "time": 2.622, "message": "Writer 3 acquired the semaphore. Exclusive writing access granted.", "type": "lock", "reader_count": 0, "active_readers": 0, "active_writer": 3, "waiting_readers": 0, "waiting_writers": 1, "database_value": 151, "version": 4}, {"number": 149, "time": 2.622, "message": "Writer 3 starts writing operation 2.", "type": "write", "reader_count": 0, "active_readers": 0, "active_writer": 3, "waiting_readers": 0, "waiting_writers": 1, "database_value": 151, "version": 4}, {"number": 150, "time": 2.756, "message": "Writer 1 completed both writing operations.", "type": "finish", "reader_count": 0, "active_readers": 0, "active_writer": 3, "waiting_readers": 0, "waiting_writers": 1, "database_value": 151, "version": 4}, {"number": 151, "time": 2.874, "message": "Writer 3 updated the database from 151 to 159. Database version is now 5.", "type": "write", "reader_count": 0, "active_readers": 0, "active_writer": 3, "waiting_readers": 0, "waiting_writers": 1, "database_value": 159, "version": 5}, {"number": 152, "time": 2.874, "message": "Writer 3 completed writing operation 2.", "type": "write", "reader_count": 0, "active_readers": 0, "active_writer": 3, "waiting_readers": 0, "waiting_writers": 1, "database_value": 159, "version": 5}, {"number": 153, "time": 2.874, "message": "Writer 3 released the resource semaphore. Other threads may now proceed.", "type": "release", "reader_count": 0, "active_readers": 0, "active_writer": null, "waiting_readers": 0, "waiting_writers": 1, "database_value": 159, "version": 5}, {"number": 154, "time": 2.874, "message": "Writer 2 acquired the semaphore. Exclusive writing access granted.", "type": "lock", "reader_count": 0, "active_readers": 0, "active_writer": 2, "waiting_readers": 0, "waiting_writers": 0, "database_value": 159, "version": 5}, {"number": 155, "time": 2.874, "message": "Writer 2 starts writing operation 2.", "type": "write", "reader_count": 0, "active_readers": 0, "active_writer": 2, "waiting_readers": 0, "waiting_writers": 0, "database_value": 159, "version": 5}, {"number": 156, "time": 3.032, "message": "Writer 3 completed both writing operations.", "type": "finish", "reader_count": 0, "active_readers": 0, "active_writer": 2, "waiting_readers": 0, "waiting_writers": 0, "database_value": 159, "version": 5}, {"number": 157, "time": 3.282, "message": "Writer 2 updated the database from 159 to 167. Database version is now 6.", "type": "write", "reader_count": 0, "active_readers": 0, "active_writer": 2, "waiting_readers": 0, "waiting_writers": 0, "database_value": 167, "version": 6}, {"number": 158, "time": 3.282, "message": "Writer 2 completed writing operation 2.", "type": "write", "reader_count": 0, "active_readers": 0, "active_writer": 2, "waiting_readers": 0, "waiting_writers": 0, "database_value": 167, "version": 6}, {"number": 159, "time": 3.282, "message": "Writer 2 released the resource semaphore. Other threads may now proceed.", "type": "release", "reader_count": 0, "active_readers": 0, "active_writer": null, "waiting_readers": 0, "waiting_writers": 0, "database_value": 167, "version": 6}, {"number": 160, "time": 3.402, "message": "Writer 2 completed both writing operations.", "type": "finish", "reader_count": 0, "active_readers": 0, "active_writer": null, "waiting_readers": 0, "waiting_writers": 0, "database_value": 167, "version": 6}, {"number": 161, "time": 3.403, "message": "Simulation finished. All readers and writers have completed.", "type": "finish", "reader_count": 0, "active_readers": 0, "active_writer": null, "waiting_readers": 0, "waiting_writers": 0, "database_value": 167, "version": 6}];
+
+let current = 0;
+let timer = null;
+
+const readerIds = [1, 2, 3, 4, 5, 6];
+const writerIds = [1, 2, 3];
+
+function inferThreadState(id, type, message, writer) {
+    if (type === "finish" && message.includes("Reader " + id + " ")) {
+        return "Finished";
+    }
+
+    if (message.includes("Reader " + id + " starts reading")) {
+        return "Reading";
+    }
+
+    if (message.includes("Reader " + id + " completed operation")) {
+        return "Read completed";
+    }
+
+    if (message.includes("Reader " + id + " requests")) {
+        return "Requesting access";
+    }
+
+    if (message.includes("Reader " + id + ", operation")) {
+        return "Requesting access";
+    }
+
+    if (message.includes("Reader " + id + " is waiting")) {
+        return "Waiting";
+    }
+
+    if (message.includes("Reader " + id + " completed all")) {
+        return "Finished";
+    }
+
+    if (message.includes("Writer " + id + " starts writing")) {
+        return "Writing";
+    }
+
+    if (message.includes("Writer " + id + " updated")) {
+        return "Writing completed";
+    }
+
+    if (message.includes("Writer " + id + " acquired")) {
+        return "Has exclusive access";
+    }
+
+    if (message.includes("Writer " + id + " is waiting")) {
+        return "Waiting for resource";
+    }
+
+    if (message.includes("Writer " + id + " released")) {
+        return "Resource released";
+    }
+
+    if (message.includes("Writer " + id + " completed both")) {
+        return "Finished";
+    }
+
+    return "Ready / not active";
+}
+
+function renderThreads(e) {
+    const grid = document.getElementById("threadGrid");
+    let output = "";
+
+    readerIds.forEach(id => {
+        let state = inferThreadState(
+            id, e.type, e.message, false
+        );
+
+        // The snapshot is authoritative for currently active readers.
+        if (e.active_readers > 0 &&
+            e.message.includes("Reader " + id + " starts reading")) {
+            state = "Reading";
+        }
+
+        output += `
+            <div class="thread">
+                <strong>Reader ${id}</strong>
+                <div class="state">${state}</div>
+            </div>`;
+    });
+
+    writerIds.forEach(id => {
+        let state = inferThreadState(
+            id, e.type, e.message, true
+        );
+
+        if (e.active_writer === id) {
+            state = "Writing / exclusive access";
+        }
+
+        output += `
+            <div class="thread">
+                <strong>Writer ${id}</strong>
+                <div class="state">${state}</div>
+            </div>`;
+    });
+
+    grid.innerHTML = output;
+}
+
+function render() {
+    const e = events[current];
+
+    if (!e) return;
+
+    document.getElementById("eventNumber").textContent =
+        `${current + 1} / ${events.length}`;
+
+    document.getElementById("activeReaders").textContent =
+        e.active_readers;
+
+    document.getElementById("waitingReaders").textContent =
+        e.waiting_readers;
+
+    document.getElementById("waitingWriters").textContent =
+        e.waiting_writers;
+
+    document.getElementById("databaseValue").textContent =
+        e.database_value;
+
+    document.getElementById("version").textContent = e.version;
+
+    const resource = document.getElementById("resource");
+
+    if (e.active_writer !== null) {
+        resource.textContent =
+            "Shared resource: Held exclusively by Writer " +
+            e.active_writer;
+        resource.style.background = "#fee2e2";
+        resource.style.color = "#991b1b";
+    } else if (e.active_readers > 0) {
+        resource.textContent =
+            "Shared resource: Held by " +
+            e.active_readers + " active reader(s)";
+        resource.style.background = "#dbeafe";
+        resource.style.color = "#1e40af";
+    } else {
+        resource.textContent = "Shared resource: Available";
+        resource.style.background = "#dcfce7";
+        resource.style.color = "#166534";
+    }
+
+    document.getElementById("writerStatus").textContent =
+        "Active writer: " +
+        (e.active_writer === null ? "None" : e.active_writer);
+
+    document.getElementById("eventType").textContent = e.type;
+    document.getElementById("eventTitle").textContent =
+        "Event " + e.number;
+
+    document.getElementById("eventMessage").textContent = e.message;
+
+    document.getElementById("eventTime").textContent =
+        "Elapsed time: " + e.time + " seconds";
+
+    document.getElementById("progress").textContent =
+        "Displaying event " + (current + 1) +
+        " of " + events.length;
+
+    document.getElementById("timeline").value = current;
+
+    document.getElementById("playButton").disabled =
+        current >= events.length - 1;
+
+    renderThreads(e);
+    renderEventList();
+}
+
+function renderEventList() {
+    const list = document.getElementById("eventList");
+
+    list.innerHTML = events.map((e, i) => `
+        <div class="event-row ${i === current ? "current" : ""}"
+             onclick="goTo(${i})">
+            <b>Event ${e.number}</b>
+            · ${e.time}s
+            <br>
+            ${escapeHtml(e.message)}
+        </div>
+    `).join("");
+
+    const selected = list.querySelector(".current");
+    if (selected) {
+        selected.scrollIntoView({
+            block: "nearest",
+            behavior: "auto"
+        });
+    }
+}
+
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, ch => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+    })[ch]);
+}
+
+function goTo(value) {
+    pause();
+    current = Number(value);
+    current = Math.max(0, Math.min(current, events.length - 1));
+    render();
+}
+
+function next() {
+    pause();
+    if (current < events.length - 1) {
+        current++;
+        render();
+    }
+}
+
+function previous() {
+    pause();
+    if (current > 0) {
+        current--;
+        render();
+    }
+}
+
+function reset() {
+    pause();
+    current = 0;
+    render();
+}
+
+function play() {
+    pause();
+
+    if (current >= events.length - 1) {
+        current = 0;
+        render();
+    }
+
+    timer = setInterval(() => {
+        if (current >= events.length - 1) {
+            pause();
+            return;
+        }
+
+        current++;
+        render();
+    }, 900);
+}
+
+function pause() {
+    if (timer !== null) {
+        clearInterval(timer);
+        timer = null;
+    }
+}
+
+document.getElementById("timeline").max = events.length - 1;
+render();
+</script>
+
+</body>
+</html>
